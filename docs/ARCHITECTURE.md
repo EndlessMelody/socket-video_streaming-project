@@ -1,14 +1,16 @@
 # Socket Communication System - Architecture Document
 
-## 1. TỔNG QUAN HỆ THỐNG
+## 1. SYSTEM OVERVIEW
 
-### 1.1 Mục tiêu
-- Xây dựng hệ thống socket communication với client-server architecture
-- Hỗ trợ multiple concurrent connections
-- Persistent storage với database
+### 1.1 Objectives
+
+- Build a socket communication system with client-server architecture
+- Support multiple concurrent connections
+- Persistent storage with database
 - Real-time message broadcasting
 
 ### 1.2 Tech Stack
+
 - **Backend:** Python 3.10+, socket, threading/asyncio
 - **Database:** SQLite (development), PostgreSQL (production optional)
 - **Frontend:** PyQt5/tkinter
@@ -17,7 +19,7 @@
 
 ---
 
-## 2. KIẾN TRÚC TỔNG QUAN
+## 2. ARCHITECTURE OVERVIEW
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -86,7 +88,9 @@
 ### 3.1 Server Components
 
 #### 3.1.1 Socket Server (`socket_server.py`)
+
 **Responsibilities:**
+
 - Initialize TCP socket on specified host:port
 - Listen for incoming connections
 - Accept client connections
@@ -94,6 +98,7 @@
 - Manage server lifecycle (start/stop)
 
 **Key Methods:**
+
 ```python
 class SocketServer:
     __init__(host, port)
@@ -104,13 +109,16 @@ class SocketServer:
 ```
 
 #### 3.1.2 Connection Handler (`connection_handler.py`)
+
 **Responsibilities:**
+
 - Handle individual client connections
 - Receive and send messages
 - Maintain connection state
 - Handle disconnections gracefully
 
 **Key Methods:**
+
 ```python
 class ConnectionHandler:
     __init__(client_socket, address, server)
@@ -121,13 +129,16 @@ class ConnectionHandler:
 ```
 
 #### 3.1.3 Message Protocol (`message_protocol.py`)
+
 **Responsibilities:**
+
 - Define message format (JSON)
 - Parse incoming messages
 - Validate message structure
 - Route commands to appropriate handlers
 
 **Message Types:**
+
 ```json
 // CONNECT
 {
@@ -152,13 +163,16 @@ class ConnectionHandler:
 ```
 
 #### 3.1.4 Database Manager (`database/db_manager.py`)
+
 **Responsibilities:**
+
 - Initialize database schema
 - Perform CRUD operations
 - Manage transactions
 - Handle database connections
 
 **Key Methods:**
+
 ```python
 class DatabaseManager:
     init_database()
@@ -172,13 +186,16 @@ class DatabaseManager:
 ### 3.2 Client Components
 
 #### 3.2.1 Socket Client (`socket_client.py`)
+
 **Responsibilities:**
+
 - Connect to server
 - Send messages to server
 - Receive messages from server
 - Handle reconnection logic
 
 **Key Methods:**
+
 ```python
 class SocketClient:
     connect(host, port, username)
@@ -189,6 +206,7 @@ class SocketClient:
 ```
 
 #### 3.2.2 GUI Components (`client/gui/`)
+
 **Main Window:** Application container
 **Login Window:** User authentication
 **Chat Window:** Message display and input
@@ -198,6 +216,7 @@ class SocketClient:
 ## 4. DATA FLOW
 
 ### 4.1 Connection Flow
+
 ```
 Client                    Server                    Database
   |                         |                          |
@@ -209,6 +228,7 @@ Client                    Server                    Database
 ```
 
 ### 4.2 Message Flow
+
 ```
 Client A                  Server                  Client B
   |                         |                        |
@@ -220,6 +240,7 @@ Client A                  Server                  Client B
 ```
 
 ### 4.3 Disconnection Flow
+
 ```
 Client                    Server                    Database
   |                         |                          |
@@ -234,6 +255,7 @@ Client                    Server                    Database
 ## 5. THREADING MODEL
 
 ### 5.1 Server Threading
+
 ```
 Main Thread
 ├── Socket Accept Loop (blocking)
@@ -246,6 +268,7 @@ Main Thread
 ```
 
 ### 5.2 Client Threading
+
 ```
 Main Thread (GUI)
 ├── Event Loop (GUI events)
@@ -259,16 +282,19 @@ Main Thread (GUI)
 ## 6. ERROR HANDLING
 
 ### 6.1 Connection Errors
+
 - **Connection Timeout:** Retry mechanism with exponential backoff
 - **Connection Refused:** Notify user, provide retry option
 - **Connection Lost:** Auto-reconnect with saved credentials
 
 ### 6.2 Message Errors
+
 - **Invalid Format:** Log error, send error response
 - **Oversized Message:** Reject with size limit error
 - **Encoding Error:** Handle with UTF-8 fallback
 
 ### 6.3 Database Errors
+
 - **Connection Error:** Retry with connection pool
 - **Constraint Violation:** Return specific error message
 - **Deadlock:** Retry transaction with backoff
@@ -278,17 +304,20 @@ Main Thread (GUI)
 ## 7. SECURITY CONSIDERATIONS
 
 ### 7.1 Authentication
+
 - Simple username-based (Phase 1)
 - Password hashing with bcrypt (Phase 2)
 - Token-based auth (Future)
 
 ### 7.2 Input Validation
+
 - Sanitize all user inputs
 - Validate message length
 - Prevent SQL injection (parameterized queries)
 - XSS prevention in GUI
 
 ### 7.3 Network Security
+
 - Consider SSL/TLS for production
 - Rate limiting per client
 - IP-based blocking for abuse
@@ -298,11 +327,13 @@ Main Thread (GUI)
 ## 8. SCALABILITY CONSIDERATIONS
 
 ### 8.1 Current Limitations
+
 - Single server instance
 - Threading-based (limited by GIL)
 - SQLite (single file)
 
 ### 8.2 Future Improvements
+
 - **Asyncio:** Replace threading with asyncio for better concurrency
 - **Load Balancing:** Multiple server instances with load balancer
 - **Message Queue:** Redis/RabbitMQ for message buffering
@@ -314,6 +345,7 @@ Main Thread (GUI)
 ## 9. DEPLOYMENT ARCHITECTURE
 
 ### 9.1 Development
+
 ```
 Local Machine
 ├── Server (localhost:5555)
@@ -322,6 +354,7 @@ Local Machine
 ```
 
 ### 9.2 Docker Deployment
+
 ```
 Docker Network
 ├── Socket Server Container
@@ -334,6 +367,7 @@ Docker Network
 ```
 
 ### 9.3 Production (Future)
+
 ```
 Cloud Infrastructure
 ├── Load Balancer
@@ -348,6 +382,7 @@ Cloud Infrastructure
 ## 10. MONITORING & LOGGING
 
 ### 10.1 Metrics to Track
+
 - Active connections count
 - Messages per second
 - Connection errors
@@ -355,6 +390,7 @@ Cloud Infrastructure
 - Memory usage per thread
 
 ### 10.2 Logging Strategy
+
 ```python
 # Logging levels
 DEBUG:   Detailed debug information
@@ -369,16 +405,19 @@ CRITICAL: System failures
 ## 11. TESTING STRATEGY
 
 ### 11.1 Unit Tests
+
 - Test individual components in isolation
 - Mock external dependencies
 - Coverage target: 80%+
 
 ### 11.2 Integration Tests
+
 - Test client-server interaction
 - Test database operations
 - Test message flow end-to-end
 
 ### 11.3 Load Tests
+
 - Simulate multiple concurrent clients
 - Measure performance under load
 - Identify bottlenecks
@@ -388,24 +427,28 @@ CRITICAL: System failures
 ## 12. DEVELOPMENT PHASES
 
 ### Phase 1: Foundation (Week 1)
+
 - [ ] Basic socket server (single client)
 - [ ] Basic socket client
 - [ ] Database schema
 - [ ] Simple message protocol
 
 ### Phase 2: Core Features (Week 2)
+
 - [ ] Multi-threading support
 - [ ] Message broadcasting
 - [ ] Database integration
 - [ ] GUI client
 
 ### Phase 3: Enhancement (Week 3)
+
 - [ ] Error handling
 - [ ] Reconnection logic
 - [ ] Message history
 - [ ] User authentication
 
 ### Phase 4: Production Ready (Week 4)
+
 - [ ] Docker deployment
 - [ ] Complete testing
 - [ ] Documentation
