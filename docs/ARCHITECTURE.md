@@ -1,84 +1,183 @@
-# Socket Communication System - Architecture Document
+# Video Streaming over Socket - Architecture Document
 
 ## 1. SYSTEM OVERVIEW
 
 ### 1.1 Objectives
 
-- Build a socket communication system with client-server architecture
-- Support multiple concurrent connections
-- Persistent storage with database
-- Real-time message broadcasting
+- Build a real-time video streaming system using socket programming
+- Support 1-to-many video broadcasting (one sender, multiple viewers)
+- Implement frame buffering and synchronization
+- Support multiple video quality levels with dynamic adjustment
+- Ensure low latency video transmission
 
 ### 1.2 Tech Stack
 
-- **Backend:** Python 3.10+, socket, threading/asyncio
-- **Database:** SQLite (development), PostgreSQL (production optional)
-- **Frontend:** PyQt5/tkinter
+- **Core:** Python 3.10+, socket, threading
+- **Video Processing:** OpenCV (cv2), PyAV, NumPy
+- **Video Codecs:** H.264 (primary), MJPEG (fallback)
+- **Database:** SQLite (session logging)
+- **Frontend:** PyQt5 (GUI for video display/controls)
 - **Testing:** pytest
 - **Deployment:** Docker
+
+### 1.3 Key Features
+
+- Real-time video capture from webcam
+- Video encoding and compression (H.264/MJPEG)
+- Frame packetization for network transmission
+- Multi-client video broadcasting
+- Frame buffering and drop mechanism
+- Quality adaptation (Low/Medium/High/Ultra)
+- Session persistence and viewer logging
 
 ---
 
 ## 2. ARCHITECTURE OVERVIEW
 
+### 2.1 System Architecture Diagram
+
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                     CLIENT LAYER                             │
-├─────────────────────────────────────────────────────────────┤
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │   Client 1   │  │   Client 2   │  │   Client N   │      │
-│  │   (GUI App)  │  │   (GUI App)  │  │   (GUI App)  │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-│         │                  │                  │               │
-│         └──────────────────┼──────────────────┘              │
-│                            │                                  │
-└────────────────────────────┼──────────────────────────────────┘
-                             │ TCP Socket Connection
-                             │
-┌────────────────────────────▼──────────────────────────────────┐
-│                     SERVER LAYER                              │
-├─────────────────────────────────────────────────────────────┤
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │           Socket Server (Main Thread)                  │ │
-│  │         - Accept connections                           │ │
-│  │         - Spawn handler threads                        │ │
-│  └────────────────┬───────────────────────────────────────┘ │
-│                   │                                          │
-│  ┌────────────────▼───────────────────────────────────────┐ │
-│  │         Connection Handler (Multi-threaded)            │ │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐            │ │
-│  │  │ Thread 1 │  │ Thread 2 │  │ Thread N │            │ │
-│  │  │ Client 1 │  │ Client 2 │  │ Client N │            │ │
-│  │  └──────────┘  └──────────┘  └──────────┘            │ │
-│  └────────────────┬───────────────────────────────────────┘ │
-│                   │                                          │
-│  ┌────────────────▼───────────────────────────────────────┐ │
-│  │            Message Protocol Handler                     │ │
-│  │  - Parse JSON messages                                 │ │
-│  │  - Route commands (CONNECT, MESSAGE, DISCONNECT)      │ │
-│  │  - Validate message format                            │ │
-│  └────────────────┬───────────────────────────────────────┘ │
-│                   │                                          │
-└───────────────────┼──────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                    BROADCASTER CLIENT                             │
+├──────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Video Capture Module (OpenCV)                             │ │
+│  │    - Initialize webcam                                     │ │
+│  │    - Capture frames at specified FPS                       │ │
+│  │    - Pre-processing (resize, format conversion)            │ │
+│  └────────────────┬───────────────────────────────────────────┘ │
+│                   │ Raw frames                                   │
+│  ┌────────────────▼───────────────────────────────────────────┐ │
+│  │  Video Encoder (PyAV/H.264)                                │ │
+│  │    - Encode frames using H.264/MJPEG                       │ │
+│  │    - Apply compression based on quality settings           │ │
+│  │    - Generate keyframes periodically                       │ │
+│  └────────────────┬───────────────────────────────────────────┘ │
+│                   │ Encoded frames                               │
+│  ┌────────────────▼───────────────────────────────────────────┐ │
+│  │  Frame Packetizer                                          │ │
+│  │    - Add frame header (seq, timestamp, size, flags)        │ │
+│  │    - Split large frames into chunks                        │ │
+│  │    - Prepare for socket transmission                       │ │
+│  └────────────────┬───────────────────────────────────────────┘ │
+│                   │ Video packets                                │
+└───────────────────┼──────────────────────────────────────────────┘
+                    │ TCP Socket
                     │
-┌───────────────────▼──────────────────────────────────────────┐
-│                  DATABASE LAYER                              │
-├─────────────────────────────────────────────────────────────┤
-│  ┌────────────────────────────────────────────────────────┐ │
-│  │              Database Manager                           │ │
-│  │  - Connection pooling                                  │ │
-│  │  - CRUD operations                                     │ │
-│  │  - Transaction management                              │ │
-│  └────────────────┬───────────────────────────────────────┘ │
-│                   │                                          │
-│  ┌────────────────▼───────────────────────────────────────┐ │
-│  │              SQLite Database                            │ │
-│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐            │ │
-│  │  │  Users   │  │ Messages │  │ Sessions │            │ │
-│  │  │  Table   │  │  Table   │  │  Table   │            │ │
-│  │  └──────────┘  └──────────┘  └──────────┘            │ │
-│  └────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────┘
+┌───────────────────▼──────────────────────────────────────────────┐
+│                    VIDEO STREAMING SERVER                         │
+├──────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │  Socket Server (Main Thread)                               │ │
+│  │    - Accept broadcaster connection                         │ │
+│  │    - Accept viewer connections                             │ │
+│  │    - Manage video sessions                                 │ │
+│  └────────────────┬───────────────────────────────────────────┘ │
+│                   │                                              │
+│  ┌────────────────▼───────────────────────────────────────────┐ │
+│  │  Video Frame Handler                                       │ │
+│  │    - Receive video packets from broadcaster                │ │
+│  │    - Parse frame headers                                   │ │
+│  │    - Reassemble chunked frames                             │ │
+│  │    - Validate frame integrity                              │ │
+│  └────────────────┬───────────────────────────────────────────┘ │
+│                   │                                              │
+│  ┌────────────────▼───────────────────────────────────────────┐ │
+│  │  Frame Buffer Manager                                      │ │
+│  │    - Circular buffer for frame storage                     │ │
+│  │    - Frame drop logic when buffer full                     │ │
+│  │    - Priority queue (keyframes > P-frames)                 │ │
+│  └────────────────┬───────────────────────────────────────────┘ │
+│                   │                                              │
+│  ┌────────────────▼───────────────────────────────────────────┐ │
+│  │  Broadcaster (Multi-threaded)                              │ │
+│  │  ┌──────────┐  ┌──────────┐  ┌──────────┐                │ │
+│  │  │ Thread 1 │  │ Thread 2 │  │ Thread N │                │ │
+│  │  │ Viewer 1 │  │ Viewer 2 │  │ Viewer N │                │ │
+│  │  └──────────┘  └──────────┘  └──────────┘                │ │
+│  │    - Send frames to connected viewers                      │ │
+│  │    - Handle viewer quality preferences                     │ │
+│  │    - Monitor bandwidth and adjust                          │ │
+│  └────────────────┬───────────────────────────────────────────┘ │
+│                   │                                              │
+└───────────────────┼──────────────────────────────────────────────┘
+                    │ TCP Sockets (Multiple)
+                    │
+┌───────────────────▼──────────────────────────────────────────────┐
+│                    VIEWER CLIENTS                                 │
+├──────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │  Viewer 1    │  │  Viewer 2    │  │  Viewer N    │          │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │
+│         │                  │                  │                   │
+│  ┌──────▼──────────────────▼──────────────────▼───────────────┐ │
+│  │  Frame Receiver                                             │ │
+│  │    - Receive video packets                                 │ │
+│  │    - Parse frame headers                                   │ │
+│  │    - Reassemble frames                                     │ │
+│  └────────────────┬────────────────────────────────────────────┘ │
+│                   │                                              │
+│  ┌────────────────▼────────────────────────────────────────────┐ │
+│  │  Frame Buffer                                               │ │
+│  │    - Buffer incoming frames                                │ │
+│  │    - Handle jitter and network delays                      │ │
+│  └────────────────┬────────────────────────────────────────────┘ │
+│                   │                                              │
+│  ┌────────────────▼────────────────────────────────────────────┐ │
+│  │  Video Decoder                                              │ │
+│  │    - Decode H.264/MJPEG frames                             │ │
+│  │    - Convert to display format (RGB)                       │ │
+│  └────────────────┬────────────────────────────────────────────┘ │
+│                   │                                              │
+│  ┌────────────────▼────────────────────────────────────────────┐ │
+│  │  Video Display (GUI)                                        │ │
+│  │    - Render frames using OpenCV/PyQt5                      │ │
+│  │    - Display FPS and latency stats                         │ │
+│  │    - Quality control UI                                    │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────┐
+│                    DATABASE LAYER                                 │
+├──────────────────────────────────────────────────────────────────┤
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │              SQLite Database                                │ │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │ │
+│  │  │ Video       │  │  Viewer     │  │  Session    │        │ │
+│  │  │ Sessions    │  │  Logs       │  │  Stats      │        │ │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘        │ │
+│  └────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+### 2.2 Data Flow
+
+#### Broadcasting Flow (Sender → Server → Viewers)
+
+```
+[Webcam]
+    ↓ (30 FPS raw frames)
+[Capture Thread]
+    ↓ (Resize, preprocess)
+[Encoder]
+    ↓ (H.264 compressed frames)
+[Packetizer]
+    ↓ (Frame packets with headers)
+[Socket Send]
+    ↓ (TCP transmission)
+[Server Receive]
+    ↓ (Frame validation)
+[Frame Buffer]
+    ↓ (Buffered frames)
+[Broadcast Threads] → → → [Viewer 1] [Viewer 2] [Viewer N]
+    ↓ (Per-client sockets)
+[Viewer Receive]
+    ↓ (Frame reassembly)
+[Viewer Buffer]
+    ↓ (Jitter handling)
+[Decoder]
+    ↓ (RGB frames)
+[Display]
 ```
 
 ---

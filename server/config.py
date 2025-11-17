@@ -27,6 +27,36 @@ class Config:
     MESSAGE_MAX_SIZE: int = int(os.getenv('MESSAGE_MAX_SIZE', '4096'))
     ENCODING: str = os.getenv('ENCODING', 'utf-8')
     
+    # Video Streaming Configuration
+    BUFFER_SIZE: int = int(os.getenv('BUFFER_SIZE', '65536'))  # 64KB for video frames
+    
+    # Video Quality Settings
+    DEFAULT_FPS: int = int(os.getenv('DEFAULT_FPS', '30'))
+    DEFAULT_WIDTH: int = int(os.getenv('DEFAULT_WIDTH', '640'))
+    DEFAULT_HEIGHT: int = int(os.getenv('DEFAULT_HEIGHT', '480'))
+    MAX_WIDTH: int = 1920
+    MAX_HEIGHT: int = 1080
+    MIN_WIDTH: int = 320
+    MIN_HEIGHT: int = 240
+    
+    # Video Quality Presets
+    QUALITY_LOW = {'width': 320, 'height': 240, 'fps': 15, 'compression': 50, 'bitrate': 500_000}
+    QUALITY_MEDIUM = {'width': 640, 'height': 480, 'fps': 24, 'compression': 70, 'bitrate': 1_500_000}
+    QUALITY_HIGH = {'width': 1280, 'height': 720, 'fps': 30, 'compression': 85, 'bitrate': 3_000_000}
+    QUALITY_ULTRA = {'width': 1920, 'height': 1080, 'fps': 30, 'compression': 90, 'bitrate': 6_000_000}
+    
+    # Frame Buffer Settings
+    MAX_BUFFER_FRAMES: int = 60
+    FRAME_DROP_THRESHOLD: float = 0.8  # Drop frames when buffer 80% full
+    
+    # Codec Settings
+    VIDEO_CODEC: str = os.getenv('VIDEO_CODEC', 'h264')  # h264, mjpeg, vp8
+    FALLBACK_CODEC: str = 'mjpeg'
+    
+    # Network Settings
+    CHUNK_SIZE: int = 32768  # 32KB chunks for frame transmission
+    MAX_FRAME_SIZE: int = 1_048_576  # 1MB max frame size
+    
     # Database configuration
     DB_TYPE: str = os.getenv('DB_TYPE', 'sqlite')
     DB_NAME: str = os.getenv('DB_NAME', 'chat_server.db')
