@@ -188,6 +188,7 @@ Client A                Server               Client B               Client C
 ## 6. Deployment Architecture
 
 ### Development Environment
+
 ```
 ┌────────────────────────────────────────────┐
 │         Local Machine                      │
@@ -211,6 +212,7 @@ Client A                Server               Client B               Client C
 ```
 
 ### Docker Environment
+
 ```
 ┌────────────────────────────────────────────┐
 │         Docker Network                     │
@@ -283,6 +285,7 @@ Try: Parse Message
 ---
 
 **Legend:**
+
 - `│ ▼ ─>` : Data flow direction
 - `[STATE]` : System state
 - `(PK)` : Primary Key

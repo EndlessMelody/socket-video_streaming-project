@@ -57,6 +57,7 @@ git commit -m "Add brief description of changes"
 ```
 
 **Commit Message Format:**
+
 ```
 Type: Brief description (50 chars or less)
 
@@ -69,6 +70,7 @@ Explain what and why, not how.
 ```
 
 **Commit Types:**
+
 - `feat:` New feature
 - `fix:` Bug fix
 - `docs:` Documentation changes
@@ -78,6 +80,7 @@ Explain what and why, not how.
 - `chore:` Maintenance tasks
 
 **Examples:**
+
 ```
 feat: Add message encryption support
 
@@ -151,38 +154,38 @@ logger = logging.getLogger(__name__)
 
 class ExampleClass:
     """Brief description of the class.
-    
+
     Detailed explanation of the class purpose and usage.
-    
+
     Attributes:
         attribute_name: Description of the attribute
     """
-    
+
     def __init__(self, param: str) -> None:
         """Initialize the class.
-        
+
         Args:
             param: Description of parameter
         """
         self.attribute_name = param
-    
+
     def example_method(self, value: int) -> Optional[str]:
         """Brief description of method.
-        
+
         Detailed explanation of what the method does.
-        
+
         Args:
             value: Description of the argument
-            
+
         Returns:
             Description of return value
-            
+
         Raises:
             ValueError: When value is negative
         """
         if value < 0:
             raise ValueError("Value must be non-negative")
-        
+
         return str(value)
 ```
 
@@ -222,7 +225,7 @@ from server.socket_server import SocketServer
 def test_server_initialization():
     """Test that server initializes with correct parameters."""
     server = SocketServer(host='127.0.0.1', port=5555)
-    
+
     assert server.host == '127.0.0.1'
     assert server.port == 5555
     assert server.running is False
@@ -239,6 +242,7 @@ def test_server_port_validation():
 ### Before Submitting
 
 1. **Update your branch:**
+
    ```bash
    git checkout main
    git pull upstream main
@@ -247,11 +251,13 @@ def test_server_port_validation():
    ```
 
 2. **Run tests:**
+
    ```bash
    pytest tests/
    ```
 
 3. **Check code quality:**
+
    ```bash
    black server/ client/
    pylint server/ client/
@@ -316,6 +322,7 @@ socket-video_streaming-project/
 ### Reporting Issues
 
 When reporting bugs, include:
+
 - Python version
 - Operating system
 - Steps to reproduce
@@ -326,6 +333,7 @@ When reporting bugs, include:
 ### Feature Requests
 
 When requesting features:
+
 - Describe the problem you're trying to solve
 - Explain your proposed solution
 - Consider backwards compatibility

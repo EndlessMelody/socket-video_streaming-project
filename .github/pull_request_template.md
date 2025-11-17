@@ -1,8 +1,10 @@
 ## Description
+
 Please include a summary of the changes and which issue is fixed.
 Fixes # (issue number)
 
 ## Type of Change
+
 Please delete options that are not relevant.
 
 - [ ] Bug fix (non-breaking change which fixes an issue)
@@ -14,16 +16,19 @@ Please delete options that are not relevant.
 - [ ] Test addition/modification
 
 ## How Has This Been Tested?
+
 Please describe the tests that you ran to verify your changes.
 
 - [ ] Test A
 - [ ] Test B
 
 ## Test Configuration
+
 - Python version:
 - Operating System:
 
 ## Checklist
+
 - [ ] My code follows the style guidelines of this project
 - [ ] I have performed a self-review of my own code
 - [ ] I have commented my code, particularly in hard-to-understand areas
@@ -34,7 +39,9 @@ Please describe the tests that you ran to verify your changes.
 - [ ] Any dependent changes have been merged and published
 
 ## Screenshots (if applicable)
+
 Add screenshots to help explain your changes.
 
 ## Additional Notes
+
 Add any additional notes or context about the pull request here.
