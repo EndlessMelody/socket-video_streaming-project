@@ -20,15 +20,14 @@ ENV/
 Thumbs.db
 
 # Project specific
-*.Mjpeg
-*.mjpeg
 *.pcap
 *.log
 
-# Reports (until final submission)
-report/*.pdf
-report/*.mp4
-report/*.pptx
-report/screenshots/*.png
-report/screenshots/*.jpg
+# Ignore actual video files but keep placeholders
+media/*.Mjpeg
+!media/*.Mjpeg
+# Note: Add real video files to .gitignore when downloaded
+
+# Ignore actual reports but keep placeholders  
+# Note: These will be added in Week 4
 
