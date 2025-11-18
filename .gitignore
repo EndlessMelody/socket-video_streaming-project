@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.Mjpeg
+*.mjpeg
+*.pcap
+*.log
+
+# Reports (until final submission)
+report/*.pdf
+report/*.mp4
+report/*.pptx
+report/screenshots/*.png
+report/screenshots/*.jpg
+
