@@ -48,10 +48,22 @@ class ServerWorker:
 		"""
 		connSocket = self.clientInfo['rtspSocket'][0]
 		while True:            
-			data = connSocket.recv(256)
-			if data:
-				print("Data received:\n" + data.decode("utf-8"))
-				self.processRtspRequest(data.decode("utf-8"))
+			try:
+				data = connSocket.recv(256)
+				if data:
+					print("Data received:\n" + data.decode("utf-8"))
+					self.processRtspRequest(data.decode("utf-8"))
+				else:
+					# Client closed connection
+					break
+			except Exception as e:
+				print(f"RTSP Connection Error: {e}")
+				break
+		
+		# Cleanup
+		connSocket.close()
+		if 'event' in self.clientInfo:
+			self.clientInfo['event'].set()
 	
 	def processRtspRequest(self, data):
 		"""
@@ -139,7 +151,7 @@ class ServerWorker:
 		Reads frames from VideoStream, packetizes them (with fragmentation), and sends them.
 		"""
 		while True:
-			self.clientInfo['event'].wait(0.033) # Wait 33ms (approx 30 FPS)
+			self.clientInfo['event'].wait(0.025) # Wait 25ms (approx 40 FPS) - Balanced speed
 			
 			# Stop sending if request is PAUSE or TEARDOWN
 			if self.clientInfo['event'].isSet(): 
@@ -147,10 +159,17 @@ class ServerWorker:
 				
 			data = self.clientInfo['videoStream'].nextFrame()
 			if not data:
-				# End of video, reset to loop
-				print("End of stream, looping...")
-				self.clientInfo['videoStream'].reset()
-				continue
+				# End of video, send EOS signal and stop
+				print("End of stream, sending EOS and stopping...")
+				try:
+					address = self.clientInfo['rtspSocket'][1][0]
+					port = int(self.clientInfo['rtpPort'])
+					self.rtpSequenceNumber += 1
+					# Send special EOS packet
+					self.clientInfo['rtpSocket'].sendto(self.makeRtp(b'EOS', self.rtpSequenceNumber, 1),(address,port))
+				except:
+					print("Error sending EOS")
+				break
 				
 			if data: 
 				# frameNumber = self.clientInfo['videoStream'].frameNbr()

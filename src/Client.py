@@ -58,8 +58,8 @@ class Client:
 		
 		# Buffering variables
 		self.frameBuffer = queue.Queue()
-		self.BUFFER_THRESHOLD = 10 # Pre-buffer 10 frames for low latency
-		self.buffering = True
+		self.BUFFER_THRESHOLD = 60 # Pre-buffer 60 frames before playing
+		self.isBuffering = False
 		self.playEvent = None
 		
 		# Reassembly buffer for HD frames
@@ -139,6 +139,7 @@ class Client:
 			self.playEvent = threading.Event()
 			self.playEvent.clear()
 			self.sendRtspRequest(self.PLAY)
+			self.teardownAcked = 0 # Reset teardown flag for replay
 			
 			# Reset statistics when playing starts
 			self.startTime = time.time()
@@ -179,14 +180,25 @@ class Client:
 				try:
 					startTime = time.time()
 					
-					# Frame Skipping Logic
-					# If buffer has too many frames (>15), skip the oldest ones to catch up.
-					# This prevents "slow motion" effect when decoding is slower than receiving.
-					while self.frameBuffer.qsize() > 15:
-						self.frameBuffer.get(block=False)
-						print("Skipping frame to catch up...")
+					# Frame Skipping Logic (Hysteresis)
+					# Trigger skip only when buffer gets very full (>200)
+					# Drain down to 150 to create a safety margin and avoid constant skipping.
+					if self.frameBuffer.qsize() > 500:
+						skipped_count = 0
+						while self.frameBuffer.qsize() > 400:
+							self.frameBuffer.get(block=False)
+							skipped_count += 1
+						print(f"Skipped {skipped_count} frames to catch up...")
 					
 					frameData = self.frameBuffer.get(block=False)
+					
+					# Check for EOS signal
+					if frameData is None:
+						print("Video Playback Complete.")
+						self.state = self.READY # Stop playing
+						tkMessageBox.showinfo("Notification", "Video Playback Complete")
+						return
+
 					self.updateMovie(frameData)
 					
 					# Adaptive Timing: Adjust sleep time based on processing time
@@ -208,6 +220,12 @@ class Client:
 				if data:
 					rtpPacket = RtpPacket()
 					rtpPacket.decode(data)
+					
+					# Check for EOS
+					if rtpPacket.getPayload() == b'EOS':
+						print("End of Stream signal received.")
+						self.frameBuffer.put(None) # Signal EOS to consumer
+						break # Stop listening
 					
 					currFrameNbr = rtpPacket.seqNum()
 					
@@ -274,6 +292,17 @@ class Client:
 						# Reset buffer
 						self.currentFrame = bytearray()
 						
+			except OSError:
+				# If socket is closed or invalid, stop listening
+				if self.teardownAcked == 1:
+					try:
+						self.rtpSocket.shutdown(socket.SHUT_RDWR)
+						self.rtpSocket.close()
+					except OSError:
+						pass
+					break
+				break # Break on any other OSError (e.g. socket closed unexpectedly)
+				
 			except:
 				# Stop listening upon requesting PAUSE or TEARDOWN
 				if self.playEvent.isSet(): 
@@ -282,8 +311,11 @@ class Client:
 				# Upon receiving ACK for TEARDOWN request,
 				# close the RTP socket
 				if self.teardownAcked == 1:
-					self.rtpSocket.shutdown(socket.SHUT_RDWR)
-					self.rtpSocket.close()
+					try:
+						self.rtpSocket.shutdown(socket.SHUT_RDWR)
+						self.rtpSocket.close()
+					except OSError:
+						pass
 					break
 					
 	def writeFrame(self, data):
