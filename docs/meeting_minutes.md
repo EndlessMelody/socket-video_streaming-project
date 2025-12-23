@@ -1,7 +1,7 @@
 # Biên Bản Cuộc Họp: Đồ Án Lập Trình Socket - Giai Đoạn 2
 
-**Ngày:** [Ngày/Tháng/Năm]
-**Thành viên tham gia:** [Thành viên 1], [Thành viên 2], [Thành viên 3]
+**Ngày:** [23/11/2025]
+**Thành viên tham gia:**: Phan Lê Đăng Khoa, Lê Hoàng Nam, Nguyễn Minh Quân
 **Dự án:** Video Streaming qua giao thức RTSP/RTP
 
 ## 1. Review Kỹ Thuật & Các Lỗi Đã Sửa (Technical Fixes)

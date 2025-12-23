@@ -36,6 +36,8 @@ class ServerWorker:
 		"""
 		self.clientInfo = clientInfo
 		self.rtpSequenceNumber = 0
+		# Generate unique SSRC for this server session (32-bit identifier)
+		self.ssrc = randint(1000000000, 2147483647)  # Random 32-bit value
 		
 	def run(self):
 		"""Start the ServerWorker thread to receive RTSP requests."""
@@ -149,18 +151,23 @@ class ServerWorker:
 		"""
 		Send RTP packets over UDP.
 		Reads frames from VideoStream, packetizes them (with fragmentation), and sends them.
+		Implements efficient HD video streaming with fragmentation for frames exceeding MTU.
 		"""
+		framesSent = 0
+		packetsSent = 0
+		
 		while True:
-			self.clientInfo['event'].wait(0.025) # Wait 25ms (approx 40 FPS) - Balanced speed
+			self.clientInfo['event'].wait(0.025) # Wait 25ms (approx 40 FPS) - Balanced speed for HD
 			
 			# Stop sending if request is PAUSE or TEARDOWN
 			if self.clientInfo['event'].isSet(): 
+				print(f"Streaming stopped. Frames: {framesSent}, Packets: {packetsSent}")
 				break 
 				
 			data = self.clientInfo['videoStream'].nextFrame()
 			if not data:
 				# End of video, send EOS signal and stop
-				print("End of stream, sending EOS and stopping...")
+				print(f"End of stream. Total frames sent: {framesSent}, Total packets: {packetsSent}")
 				try:
 					address = self.clientInfo['rtspSocket'][1][0]
 					port = int(self.clientInfo['rtpPort'])
@@ -172,30 +179,31 @@ class ServerWorker:
 				break
 				
 			if data: 
-				# frameNumber = self.clientInfo['videoStream'].frameNbr()
 				try:
 					address = self.clientInfo['rtspSocket'][1][0]
 					port = int(self.clientInfo['rtpPort'])
 					
-					# Fragmentation Logic
+					# Fragmentation Logic for HD Video (frames exceeding MTU)
 					if len(data) > self.MAX_PAYLOAD_SIZE:
-						# Split data into chunks
+						# Split data into chunks that fit within MTU
 						chunks = [data[i:i + self.MAX_PAYLOAD_SIZE] for i in range(0, len(data), self.MAX_PAYLOAD_SIZE)]
 						for i, chunk in enumerate(chunks):
 							self.rtpSequenceNumber += 1
-							# Set marker to 1 only for the last chunk
+							# Set marker to 1 only for the last chunk of the frame
 							marker = 1 if i == len(chunks) - 1 else 0
 							self.clientInfo['rtpSocket'].sendto(self.makeRtp(chunk, self.rtpSequenceNumber, marker),(address,port))
+							packetsSent += 1
+						framesSent += 1
 					else:
 						self.rtpSequenceNumber += 1
-						marker = 1
+						marker = 1  # Single packet frame
 						self.clientInfo['rtpSocket'].sendto(self.makeRtp(data, self.rtpSequenceNumber, marker),(address,port))
+						packetsSent += 1
+						framesSent += 1
 						
-				except:
-					print("Connection Error")
-					#print('-'*60)
-					#traceback.print_exc(file=sys.stdout)
-					#print('-'*60)
+				except Exception as e:
+					print(f"Connection Error: {e}")
+					break
 
 	def makeRtp(self, payload, frameNbr, marker=0):
 		"""
@@ -216,7 +224,7 @@ class ServerWorker:
 		# marker is passed as argument
 		pt = 26 # MJPEG type
 		seqnum = frameNbr
-		ssrc = 0 
+		ssrc = self.ssrc  # Use unique SSRC for this server session 
 		
 		rtpPacket = RtpPacket()
 		

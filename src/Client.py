@@ -49,23 +49,37 @@ class Client:
 		self.connectToServer()
 		self.frameNbr = 0
 		
-		# Statistics variables
+		# Statistics variables for network usage analysis
 		self.totalBytes = 0
 		self.startTime = 0
 		self.totalPackets = 0
 		self.lostPackets = 0
 		self.expectedSeqNum = 0
+		self.lastStatsUpdate = 0
+		self.packetsReceived = 0
+		self.totalFrames = 0
+		self.fragmentedFrames = 0
+		self.lastSeqNumForStats = -1
 		
-		# Buffering variables
+		# FPS calculation variables
+		self.framesDisplayed = 0
+		self.fpsStartTime = 0
+		self.currentFPS = 0.0
+		
+		# Buffering variables for client-side caching
 		self.frameBuffer = queue.Queue()
-		self.BUFFER_THRESHOLD = 60 # Pre-buffer 60 frames before playing
+		self.BUFFER_THRESHOLD = 60 # Pre-buffer 60 frames before playing (adaptive for HD)
 		self.isBuffering = False
 		self.playEvent = None
+		self.buffering = False
 		
 		# Reassembly buffer for HD frames
 		self.currentFrame = bytearray()
 		self.lastSeqNum = -1
 		self.discardingFrame = False
+		
+		# Enhanced packet loss tracking
+		self.receivedSeqNums = set()  # Track received sequence numbers for duplicate detection
 		
 	def createWidgets(self):
 		"""Build the GUI components (Buttons and Label)."""
@@ -98,7 +112,12 @@ class Client:
 		self.placeholder = ImageTk.PhotoImage(Image.new("RGB", (640, 360), "black"))
 		self.label = Label(self.master, image=self.placeholder)
 		self.label.image = self.placeholder # Keep reference to prevent garbage collection
-		self.label.grid(row=0, column=0, columnspan=4, sticky=W+E+N+S, padx=5, pady=5) 
+		self.label.grid(row=0, column=0, columnspan=4, sticky=W+E+N+S, padx=5, pady=5)
+		
+		# Create statistics label for network analysis
+		self.statsLabel = Label(self.master, text="Statistics: Waiting for data...", 
+								font=("Arial", 9), anchor="w", justify=LEFT)
+		self.statsLabel.grid(row=2, column=0, columnspan=4, sticky=W+E, padx=5, pady=2) 
 	
 	def setupMovie(self):
 		"""
@@ -148,6 +167,19 @@ class Client:
 			self.lostPackets = 0
 			self.expectedSeqNum = 0
 			self.currentFrame = bytearray()
+			self.lastStatsUpdate = 0
+			self.packetsReceived = 0
+			self.totalFrames = 0
+			self.fragmentedFrames = 0
+			self.lastSeqNumForStats = -1
+			self.receivedSeqNums.clear()
+			self.framesDisplayed = 0
+			self.fpsStartTime = 0
+			self.currentFPS = 0.0
+			try:
+				self.statsLabel.config(text="Statistics: Starting playback... Waiting for frames...")
+			except:
+				pass
 			
 			# Start buffer consumer loop (GUI thread safe)
 			self.buffering = True
@@ -161,10 +193,20 @@ class Client:
 		if self.state == self.PLAYING:
 			if self.buffering:
 				# Check if buffer has enough frames to start playback
-				if self.frameBuffer.qsize() >= self.BUFFER_THRESHOLD:
+				bufferedFrames = self.frameBuffer.qsize()
+				if bufferedFrames >= self.BUFFER_THRESHOLD:
 					self.buffering = False
-					print("Buffering Complete. Starting Playback.")
+					print(f"Buffering Complete. {bufferedFrames} frames loaded. Starting Playback.")
+					# Initialize FPS tracking when playback starts
+					self.fpsStartTime = time.time()
+					self.framesDisplayed = 0
 				else:
+					# Update statistics label to show buffering progress
+					try:
+						progress = (bufferedFrames / self.BUFFER_THRESHOLD) * 100
+						self.statsLabel.config(text=f"Buffering: {bufferedFrames}/{self.BUFFER_THRESHOLD} frames ({progress:.1f}%)...")
+					except:
+						pass
 					# Check again in 10ms
 					self.master.after(10, self.consumeBuffer)
 					return
@@ -180,15 +222,19 @@ class Client:
 				try:
 					startTime = time.time()
 					
-					# Frame Skipping Logic (Hysteresis)
-					# Trigger skip only when buffer gets very full (>200)
-					# Drain down to 150 to create a safety margin and avoid constant skipping.
-					if self.frameBuffer.qsize() > 500:
+					# Adaptive Frame Skipping Logic (Hysteresis)
+					# Trigger skip only when buffer gets very full (>500 for HD video)
+					# Drain down to 400 to create a safety margin and avoid constant skipping.
+					bufferSize = self.frameBuffer.qsize()
+					if bufferSize > 500:
 						skipped_count = 0
 						while self.frameBuffer.qsize() > 400:
-							self.frameBuffer.get(block=False)
-							skipped_count += 1
-						print(f"Skipped {skipped_count} frames to catch up...")
+							try:
+								self.frameBuffer.get(block=False)
+								skipped_count += 1
+							except queue.Empty:
+								break
+						print(f"Buffer overflow detected ({bufferSize} frames). Skipped {skipped_count} frames to catch up...")
 					
 					frameData = self.frameBuffer.get(block=False)
 					
@@ -200,6 +246,13 @@ class Client:
 						return
 
 					self.updateMovie(frameData)
+					
+					# Update FPS calculation
+					self.framesDisplayed += 1
+					if self.fpsStartTime > 0:
+						elapsedTime = time.time() - self.fpsStartTime
+						if elapsedTime > 0:
+							self.currentFPS = self.framesDisplayed / elapsedTime
 					
 					# Adaptive Timing: Adjust sleep time based on processing time
 					elapsed = (time.time() - startTime) * 1000 # ms
@@ -238,13 +291,28 @@ class Client:
 					else:
 						dataRate = 0
 						
-					# 2. Packet Loss
+					# 2. Enhanced Packet Loss Detection
 					if self.expectedSeqNum > 0: # Ignore the very first packet check
-						if currFrameNbr > self.expectedSeqNum:
+						# Check for duplicate packets
+						if currFrameNbr in self.receivedSeqNums:
+							# Duplicate packet - don't count as new packet but don't increment loss
+							pass
+						elif currFrameNbr > self.expectedSeqNum:
+							# Gap detected - packet loss
 							loss = currFrameNbr - self.expectedSeqNum
 							self.lostPackets += loss
 							print("-" * 20)
-							print(f"Packet Loss Event: Expected {self.expectedSeqNum}, Got {currFrameNbr}, Lost {loss}")
+							print(f"Packet Loss Event: Expected {self.expectedSeqNum}, Got {currFrameNbr}, Lost {loss} packets")
+						elif currFrameNbr < self.expectedSeqNum:
+							# Out-of-order packet (rare with UDP, but possible)
+							print(f"Out-of-order packet: Got {currFrameNbr}, Expected {self.expectedSeqNum}")
+					
+					# Track received sequence numbers (keep last 1000 for memory efficiency)
+					self.receivedSeqNums.add(currFrameNbr)
+					if len(self.receivedSeqNums) > 1000:
+						# Remove oldest entries
+						minSeq = min(self.receivedSeqNums)
+						self.receivedSeqNums.remove(minSeq)
 					
 					self.totalPackets += 1
 					# Avoid division by zero
@@ -254,10 +322,28 @@ class Client:
 						lossRate = 0
 					
 					self.expectedSeqNum = currFrameNbr + 1
+					self.packetsReceived += 1
 					
-					# Print Stats (Throttle to avoid console blocking)
+					# Track fragmented frames (frames that come in multiple packets)
+					if rtpPacket.marker():
+						self.totalFrames += 1
+						if currFrameNbr != self.lastSeqNumForStats + 1:
+							self.fragmentedFrames += 1
+						self.lastSeqNumForStats = currFrameNbr
+					
+					# Update GUI statistics every 0.5 seconds
+					currentTime = time.time()
+					if currentTime - self.lastStatsUpdate >= 0.5:
+						self.updateStatistics(dataRate, lossRate)
+						self.lastStatsUpdate = currentTime
+					
+					# Print comprehensive Stats (Throttle to avoid console blocking)
 					if currFrameNbr % 100 == 0:
-						print(f"Seq: {currFrameNbr} | Rate: {dataRate:.2f} kbps | Loss: {lossRate:.2f}%")
+						avgPacketSize = (self.totalBytes / self.totalPackets) if self.totalPackets > 0 else 0
+						print(f"Seq: {currFrameNbr} | FPS: {self.currentFPS:.2f} | Rate: {dataRate:.2f} kbps | "
+							  f"Loss: {lossRate:.2f}% | Frames Rcvd: {self.totalFrames} | "
+							  f"Frames Disp: {self.framesDisplayed} | Buffer: {self.frameBuffer.qsize()} | "
+							  f"Avg Pkt: {avgPacketSize:.0f} B")
 										
 					# Reassembly Logic
 					# Check for sequence gap
@@ -525,6 +611,37 @@ class Client:
 		except:
 			tkMessageBox.showwarning('Unable to Bind', 'Unable to bind PORT=%d' %self.rtpPort)
 
+	def updateStatistics(self, dataRate, lossRate):
+		"""
+		Update the statistics display in the GUI.
+		
+		Args:
+			dataRate (float): Current data rate in kbps.
+			lossRate (float): Current packet loss rate in percentage.
+		"""
+		elapsedTime = time.time() - self.startTime if self.startTime > 0 else 0
+		bufferSize = self.frameBuffer.qsize()
+		
+		# Calculate additional metrics
+		avgPacketSize = (self.totalBytes / self.totalPackets) if self.totalPackets > 0 else 0
+		fragmentationRate = (self.fragmentedFrames / self.totalFrames * 100) if self.totalFrames > 0 else 0
+		
+		# Create comprehensive statistics string with FPS and buffer info
+		statsText = (
+			f"FPS: {self.currentFPS:.2f} | "
+			f"Data Rate: {dataRate:.2f} kbps | "
+			f"Loss Rate: {lossRate:.2f}% | "
+			f"Buffer: {bufferSize} frames | "
+			f"Frames Rcvd: {self.totalFrames} | "
+			f"Frames Disp: {self.framesDisplayed} | "
+			f"Packets: {self.totalPackets}"
+		)
+		
+		try:
+			self.statsLabel.config(text=statsText)
+		except:
+			pass  # GUI may be closed
+	
 	def handler(self):
 		"""Handler on explicitly closing the GUI window."""
 		self.pauseMovie()
