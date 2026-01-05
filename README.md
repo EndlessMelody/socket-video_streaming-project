@@ -2,7 +2,7 @@
 
 # Socket Programming - RTSP/RTP Video Streaming
 
-**Đồ án Môn Học: Mạng Máy Tính - Lớp 24CTT4**
+**Course Project: Computer Networks – Class 24CTT4**
 
 _Complete implementation of Video Streaming using RTSP/RTP protocols_
 
